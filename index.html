@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Five Nights with Skebedebaldi - Demo Final</title>
+    <style>
+        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: black; color: white; font-family: 'Courier New', monospace; overflow: hidden; }
+        .screen { display: none; width: 100%; height: 100%; position: absolute; justify-content: center; align-items: center; z-index: 10; }
+        .active { display: flex; flex-direction: column; }
+        
+        .dust-layer { position: fixed; inset: 0; background: url('https://media.giphy.com/media/oEI9uWUicGvSM/giphy.gif'); opacity: 0.05; pointer-events: none; z-index: 2000; mix-blend-mode: screen; }
+
+        /* ОСВЕЩЕНИЕ И ЛАМПА */
+        .office-light { position: absolute; inset: 0; background: radial-gradient(circle at 50% 30%, transparent 10%, rgba(0,0,0,0.85) 70%); pointer-events: none; z-index: 40; }
+        .lamp-asset { position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 41; text-align: center; }
+        .chain { width: 2px; height: 100px; background: #333; margin: 0 auto; }
+        .bulb { width: 40px; height: 20px; background: #fff; border-radius: 0 0 40px 40px; box-shadow: 0 0 50px #fff; animation: flicker 4s infinite; }
+        @keyframes flicker { 0%, 90%, 100% { opacity: 1; } 92% { opacity: 0.3; } 94% { opacity: 0.8; } 96% { opacity: 0.2; } }
+
+        /* ГЛАВНОЕ МЕНЮ */
+        #screen-menu h1 { font-size: 3em; animation: glitch 0.3s infinite; text-align: center; }
+        .blink-btn { animation: blink 0.5s infinite; background: #444; color: white; border: 2px solid white; padding: 15px 40px; cursor: pointer; font-weight: bold; }
+        @keyframes glitch { 0% { transform: translate(0); } 20% { transform: translate(-2px, 2px); text-shadow: 2px 0 red; } 40% { transform: translate(-2px, -2px); text-shadow: -2px 0 blue; } 100% { transform: translate(0); } }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+        /* UI */
+        .global-ui { position: fixed; top: 20px; left: 20px; z-index: 1100; pointer-events: none; }
+        .usage-cube { width: 12px; height: 18px; background: #0f0; border: 1px solid black; display: inline-block; margin-right: 5px; }
+        .usage-cube.danger { background: #f00; }
+        .usage-cube.off { background: #111; }
+
+        /* ОФИС */
+        #screen-office { background: #0a0a0a; width: 100%; height: 100%; position: relative; }
+        #screen-office.active { display: flex; flex-direction: row; justify-content: space-between; }
+        .ui-timer { position: absolute; top: 20px; right: 25%; z-index: 1100; background: rgba(0,0,0,0.7); padding: 5px 15px; border: 1px solid #333; }
+
+        .door-container { width: 22%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 50; position: relative; }
+        .door-frame { width: 100%; height: 70%; border: 6px solid #222; background: #000; position: relative; overflow: hidden; }
+        .eyes-red { position: absolute; top: 40%; width: 100%; text-align: center; color: red; font-size: 40px; z-index: 10; display: none; }
+        .door-shutter { position: absolute; top: -100%; left: 0; width: 100%; height: 100%; background: #222; border-bottom: 8px solid #333; transition: 0.5s ease-in; z-index: 20; }
+        .door-shutter.closed { top: 0; }
+        
+        /* БЕЛЫЕ ГЛАЗА (ПРИ 0%) */
+        .eyes-white { position: absolute; top: 40%; width: 100%; text-align: center; color: white; font-size: 40px; z-index: 30; display: none; text-shadow: 0 0 20px white; }
+
+        .btn-door { background: #444; color: white; border: 2px solid #666; padding: 12px; margin-top: 15px; cursor: pointer; width: 90%; font-weight: bold; z-index: 100; }
+
+        .office-center { flex-grow: 1; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; z-index: 30; }
+        .desk { width: 70%; height: 130px; background: #050505; border-top: 3px solid #1a1a1a; }
+        .fan { width: 60px; height: 60px; background: url('https://cdn-icons-png.flaticon.com/512/954/954483.png') center/cover; filter: invert(1); animation: spin 0.1s linear infinite; position: absolute; bottom: 135px; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+        #tablet-wrap { position: fixed; top: 100%; left: 0; width: 100%; height: 100%; background: #050505; z-index: 1000; transition: top 0.4s ease-in-out; border: 15px solid #222; }
+        #tablet-wrap.up { top: 0; }
+        .tablet-trigger { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 30%; height: 45px; background: #333; color: white; text-align: center; line-height: 45px; cursor: pointer; z-index: 1200; border-radius: 10px 10px 0 0; }
+
+        /* ФИНАЛЫ */
+        #scrymer { position: fixed; inset: 0; background: black; z-index: 6000; display: none; align-items: center; justify-content: center; font-size: 250px; }
+        #win-screen { position: fixed; inset: 0; background: black; z-index: 7000; display: none; color: white; font-size: 80px; text-align: center; }
+    </style>
+</head>
+<body>
+    <div class="dust-layer"></div>
+    
+    <div id="global-ui" class="global-ui" style="display:none;">
+        Энергия: <span id="pow-num">100</span>%
+        <div class="usage-container">
+            <div class="usage-cube"></div><div class="usage-cube off"></div>
+            <div class="usage-cube off"></div><div class="usage-cube off"></div>
+        </div>
+    </div>
+
+    <div id="screen-menu" class="screen active">
+        <h1>Пять ночей с Шкебедебалди</h1>
+        <button class="blink-btn" onclick="startNightSequence()">ИГРАТЬ</button>
+    </div>
+
+    <div id="screen-office" class="screen">
+        <div class="lamp-asset"><div class="chain"></div><div id="bulb" class="bulb"></div></div>
+        <div class="office-light" id="main-light"></div>
+        <div class="ui-timer">1 Ночь<br><span id="clock" style="font-size:2em;">0:00</span></div>
+        
+        <div class="door-container">
+            <div class="door-frame">
+                <div id="eyes-l" class="eyes-red">🔴🔴</div>
+                <div id="out-eyes" class="eyes-white">⚪⚪</div>
+                <div id="shutter-l" class="door-shutter"></div>
+            </div>
+            <button class="btn-door" id="btn-l" onclick="toggleDoor('left')">ДВЕРЬ</button>
+        </div>
+
+        <div class="office-center"><div class="fan"></div><div class="desk"></div></div>
+
+        <div class="door-container">
+            <div class="door-frame">
+                <div id="eyes-r" class="eyes-red">🔴🔴</div>
+                <div id="shutter-r" class="door-shutter"></div>
+            </div>
+            <button class="btn-door" id="btn-r" onclick="toggleDoor('right')">ДВЕРЬ</button>
+        </div>
+    </div>
+
+    <div id="tablet-wrap">
+        <div style="width:100%; height:100%; display:flex; align-items:center; justify-content:center; flex-direction:column;">
+            <h2 id="cam-name" style="color:#0f0;">ГЛАВНЫЙ ЗАЛ</h2>
+            <div id="monster-cam" style="display:none; font-size:120px;">👨‍🦲</div>
+        </div>
+        <div style="position:absolute; right:30px; bottom:30px; background:white; padding:10px; color:black; border:3px solid #777;">
+            <button onclick="changeCam('hall')">ЗАЛ</button><button onclick="changeCam('kitchen')">КУХНЯ</button>
+            <button onclick="changeCam('room')">КОМНАТА</button><hr>
+            <button onclick="changeCam('doorL')">CAM L</button><button onclick="changeCam('doorR')">CAM R</button>
+        </div>
+    </div>
+
+    <div class="tablet-trigger" id="tab-btn" style="display:none;" onclick="toggleTablet()">ПЛАНШЕТ</div>
+    
+    <div id="win-screen" class="screen">6:00!</div>
+    <div id="scrymer" class="screen">👨‍🦲</div>
+
+    <script>
+        let power = 100, hour = 0, gameActive = false, tabletOpen = false;
+        let doors = { left: false, right: false }, skebedePos = 'hall', currentCam = 'hall';
+        let audioCtx, lastPowerTick = Date.now(), lastMoveTick = Date.now();
+        let attackTimer = null, isOut = false;
+
+        function playSfx(f, t, d, v) {
+            if(!audioCtx) return;
+            const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+            o.type = t; o.frequency.setValueAtTime(f, audioCtx.currentTime);
+            g.gain.setValueAtTime(v, audioCtx.currentTime);
+            o.connect(g); g.connect(audioCtx.destination);
+            o.start(); o.stop(audioCtx.currentTime + d);
+        }
+
+        function startNightSequence() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            document.getElementById('screen-menu').classList.remove('active');
+            initOffice();
+        }
+
+        function initOffice() {
+            document.getElementById('screen-office').classList.add('active');
+            document.getElementById('global-ui').style.display = 'block';
+            document.getElementById('tab-btn').style.display = 'block';
+            gameActive = true; loop();
+        }
+
+        function toggleDoor(side) {
+            if(!gameActive || isOut) return;
+            doors[side] = !doors[side];
+            document.getElementById('shutter-' + (side[0])).classList.toggle('closed');
+            playSfx(80, 'square', 0.3, 0.1);
+        }
+
+        function toggleTablet() {
+            if(!gameActive || isOut) return;
+            tabletOpen = !tabletOpen;
+            document.getElementById('tablet-wrap').classList.toggle('up');
+            playSfx(tabletOpen ? 400 : 200, 'sine', 0.15, 0.05);
+        }
+
+        function changeCam(cam) {
+            currentCam = cam;
+            document.getElementById('cam-name').innerText = cam.toUpperCase();
+            document.getElementById('monster-cam').style.display = (skebedePos === cam) ? 'block' : 'none';
+            playSfx(1000, 'sine', 0.05, 0.02);
+        }
+
+        function triggerOut() {
+            isOut = true;
+            tabletOpen = false;
+            document.getElementById('tablet-wrap').classList.remove('up');
+            document.getElementById('tab-btn').style.display = 'none';
+            // Открываем двери
+            if(doors.left) toggleDoor('left');
+            if(doors.right) toggleDoor('right');
+            
+            document.getElementById('bulb').style.display = 'none';
+            document.getElementById('main-light').style.background = 'rgba(0,0,0,0.95)';
+            
+            let e = document.getElementById('out-eyes');
+            e.style.display = 'block';
+            
+            // Музыка 9 секунд
+            let startTime = audioCtx.currentTime;
+            for(let i=0; i<18; i++) {
+                playSfx(300 + (i%3)*50, 'sine', 0.4, 0.05);
+            }
+
+            setTimeout(() => {
+                e.style.display = 'none';
+                document.getElementById('main-light').style.background = 'black';
+                setTimeout(triggerDeath, 5000);
+            }, 9000);
+        }
+
+        function triggerWin() {
+            gameActive = false;
+            document.getElementById('win-screen').style.display = 'flex';
+            // Радостная 8 бит музыка
+            for(let i=0; i<10; i++) playSfx(400 + i*100, 'triangle', 0.2, 0.1);
+            
+            setTimeout(() => {
+                document.getElementById('win-screen').innerHTML = "<div style='font-size:20px; animation: glitch 0.3s infinite;'>На данный момент, игра в демо версии, следите за обновлениями!</div>";
+                setTimeout(() => location.reload(), 6000);
+            }, 6000);
+        }
+
+        function loop() {
+            if(!gameActive) return;
+            let now = Date.now();
+            
+            if(!isOut) {
+                let act = (doors.left?1:0) + (doors.right?1:0) + (tabletOpen?1:0);
+                const cubes = document.querySelectorAll('.usage-cube');
+                cubes.forEach((c, i) => {
+                    c.className = 'usage-cube';
+                    if(i > act) c.classList.add('off');
+                    if(act >= 3) c.classList.add('danger');
+                });
+
+                let wait = [12000, 3000, 2500, 1000][act];
+                if(now - lastPowerTick >= wait) {
+                    power--; document.getElementById('pow-num').innerText = power;
+                    lastPowerTick = now;
+                    if(power <= 0) triggerOut();
+                }
+
+                if(now - lastMoveTick >= 45000) {
+                    let paths = {'hall':['room','kitchen'],'kitchen':['hall','doorR'],'room':['hall','doorL'],'doorL':['hall'],'doorR':['hall']};
+                    skebedePos = paths[skebedePos][Math.floor(Math.random()*paths[skebedePos].length)];
+                    lastMoveTick = now;
+                }
+
+                document.getElementById('eyes-l').style.display = (skebedePos === 'doorL' && !doors.left) ? 'block' : 'none';
+                document.getElementById('eyes-r').style.display = (skebedePos === 'doorR' && !doors.right) ? 'block' : 'none';
+
+                let isAtDoor = (skebedePos === 'doorL' && !doors.left) || (skebedePos === 'doorR' && !doors.right);
+                if(isAtDoor) {
+                    if(!attackTimer) attackTimer = now;
+                    if(now - attackTimer > 3000) triggerDeath();
+                } else { attackTimer = null; }
+
+                if(!this.hT) this.hT = now;
+                if(now - this.hT >= 63000) {
+                    hour++; document.getElementById('clock').innerText = hour + ":00";
+                    this.hT = now;
+                    if(hour === 6) triggerWin();
+                }
+            }
+
+            requestAnimationFrame(loop);
+        }
+
+        function triggerDeath() {
+            gameActive = false;
+            document.getElementById('scrymer').style.display = 'flex';
+            playSfx(60, 'sawtooth', 2, 0.4);
+            setTimeout(() => location.reload(), 2000);
+        }
+    </script>
+</body>
+</html>
